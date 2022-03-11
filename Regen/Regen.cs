@@ -13,13 +13,14 @@ namespace regen
 
         private const string DefaultProgressFilepath = "./progress.txt";
 
-        public Regen(string root, int threads = 1, string? processFilepath = null, FileInfo? skipFile = null)
+        public Regen(string root, int threads = 1, string? processFilepath = null, string[]? skip = null)
         {
             _root = root;
             _threads = threads;
             _processFilepath = processFilepath ?? DefaultProgressFilepath;
             _lastSuccess = GetProgress(_processFilepath);
-            _skip = GetSkip(skipFile);
+            _skip = new HashSet<string>(skip ?? Enumerable.Empty<string>());
+            Console.WriteLine(string.Join("\n", _skip));
         }
 
         public void Start()
@@ -38,7 +39,7 @@ namespace regen
                 foreach (var solutionDir in Directory.GetDirectories(serviceDir))
                 {
                     var dirName = Path.GetFileName(solutionDir);
-                    if (skip.Contains(solutionDir))
+                    if (skip.Contains(dirName))
                     {
                         WriteLine(ConsoleColor.White, $"------------------Ignoring {dirName}------------------");
                         continue;
@@ -117,29 +118,6 @@ namespace regen
             {
                 return null;
             }
-        }
-
-        private static HashSet<string> GetSkip(FileInfo? skipFile)
-        {
-            var result = new HashSet<string>();
-            if (skipFile == null || !skipFile.Exists)
-                return result;
-
-            try
-            {
-                using var stream = skipFile.OpenText();
-                string? s;
-                while ((s = stream.ReadLine()) != null)
-                {
-                    result.Add(s);
-                }
-            }
-            catch
-            {
-                return result;
-            }
-
-            return result;
         }
 
         private static bool ExecuteDotnet(string solutionDir, string program, string dirName, string command)
