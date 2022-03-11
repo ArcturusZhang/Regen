@@ -10,29 +10,28 @@ namespace regen
         private string _processFilepath;
         private string? _lastSuccess;
         private HashSet<string> _skip;
+        private int _timeout;
 
-        private const string DefaultProgressFilepath = "./progress.txt";
-
-        public Regen(string root, int threads = 1, string? processFilepath = null, string[]? skip = null)
+        public Regen(string root, string processFilepath, int timeout, string[]? skip = null, int threads = 1)
         {
             _root = root;
             _threads = threads;
-            _processFilepath = processFilepath ?? DefaultProgressFilepath;
+            _processFilepath = processFilepath;
             _lastSuccess = GetProgress(_processFilepath);
             _skip = new HashSet<string>(skip ?? Enumerable.Empty<string>());
-            Console.WriteLine(string.Join("\n", _skip));
+            _timeout = timeout;
         }
 
         public void Start()
         {
             var watch = Stopwatch.StartNew();
             bool foundLastStartingPoint = _lastSuccess is null;
-            Execute(_root, _skip, ref _lastSuccess, foundLastStartingPoint);
+            Execute(_root, _skip, ref _lastSuccess, foundLastStartingPoint, _timeout);
             Console.WriteLine($"Finished everything in {watch.Elapsed.TotalMinutes}");
             SaveProgress();
         }
 
-        public static void Execute(string root, HashSet<string> skip, ref string? lastSuccess, bool foundLastStartingPoint)
+        public static void Execute(string root, HashSet<string> skip, ref string? lastSuccess, bool foundLastStartingPoint, int timeout)
         {
             foreach (var serviceDir in Directory.GetDirectories(Path.Combine(root, "sdk")))
             {
@@ -59,7 +58,7 @@ namespace regen
                     if (dirName is null || !dirName.StartsWith("Azure.ResourceManager"))
                         continue;
 
-                    if (RegenDirectory(solutionDir, dirName))
+                    if (RegenDirectory(solutionDir, dirName, timeout))
                     {
                         lastSuccess = solutionDir;
                     }
@@ -71,11 +70,11 @@ namespace regen
             }
         }
 
-        public static bool RegenDirectory(string solutionDir, string dirName)
+        public static bool RegenDirectory(string solutionDir, string dirName, int timeout)
         {
-            return ExecuteDotnet(solutionDir, "dotnet", dirName, "restore") &&
-                ExecuteDotnet(solutionDir, "dotnet", dirName, "build /t:GenerateCode") &&
-                ExecuteDotnet(solutionDir, "dotnet", dirName, "test");
+            return ExecuteDotnet(solutionDir, "dotnet", dirName, "restore", timeout) &&
+                ExecuteDotnet(solutionDir, "dotnet", dirName, "build /t:GenerateCode", timeout) &&
+                ExecuteDotnet(solutionDir, "dotnet", dirName, "test", timeout);
             //if (!ExecutePs(solutionDir, Path.Combine(root, "eng", "scripts", "Export-API.ps1"), dirName, Path.GetFileName(serviceDir))) return;
         }
 
@@ -120,7 +119,7 @@ namespace regen
             }
         }
 
-        private static bool ExecuteDotnet(string solutionDir, string program, string dirName, string command)
+        private static bool ExecuteDotnet(string solutionDir, string program, string dirName, string command, int timeout)
         {
             var watch = Stopwatch.StartNew();
             string message;
@@ -136,7 +135,7 @@ namespace regen
                 //process.StartInfo.RedirectStandardOutput = true;
                 //process.StartInfo.RedirectStandardError = true;
                 process.Start();
-                process.WaitForExit(1800 * 1000);
+                process.WaitForExit(timeout);
                 if (!process.HasExited)
                 {
                     message = "KILLING";
