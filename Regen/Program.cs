@@ -15,6 +15,10 @@ var processOption = new Option<string>(
     description: "The process file which stores the process of last execution.",
     getDefaultValue: () => DefaultProgressFilepath);
 
+var skipTestOption = new Option<bool>(
+    name: "--skip-test",
+    description: "Skip the test execution for each package if specified.");
+
 var timeoutOption = new Option<int>(
     name: "--timeout",
     description: "The timeout of one command in seconds",
@@ -35,6 +39,12 @@ rootCommand.AddOption(skipOption);
 
 // set default handler of argument and options
 rootCommand.SetHandler(
-    (string rootDir, string processFilepath, int timeout, string[]? skip) => new Regen(rootDir, processFilepath: processFilepath, timeout: timeout * 1000, skip: skip).Start(), rootDirArgument, processOption, timeoutOption, skipOption);
+    (string rootDir, string processFilepath, int timeout, bool skipTest, string[]? skip) => new Regen(
+        rootDir,
+        processFilepath: processFilepath,
+        timeout: timeout * 1000,
+        skipTest: skipTest,
+        skip: skip).Start(),
+    rootDirArgument, processOption, timeoutOption, skipTestOption, skipOption);
 
 return await rootCommand.InvokeAsync(args);
