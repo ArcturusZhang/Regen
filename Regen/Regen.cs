@@ -10,16 +10,18 @@ namespace regen
         private string _processFilepath;
         private string? _lastSuccess;
         private bool _skipTest;
+        private bool _testOnly;
         private HashSet<string> _skip;
         private int _timeout;
 
-        public Regen(string root, string processFilepath, int timeout, bool skipTest, string[]? skip = null, int threads = 1)
+        public Regen(string root, string processFilepath, int timeout, bool skipTest, bool testOnly, string[]? skip = null, int threads = 1)
         {
             _root = root;
             _threads = threads;
             _processFilepath = processFilepath;
             _lastSuccess = GetProgress(_processFilepath);
             _skipTest = skipTest;
+            _testOnly = testOnly;
             _skip = new HashSet<string>(skip ?? Enumerable.Empty<string>());
             _timeout = timeout;
         }
@@ -28,12 +30,12 @@ namespace regen
         {
             var watch = Stopwatch.StartNew();
             bool foundLastStartingPoint = _lastSuccess is null;
-            Execute(_root, _skip, ref _lastSuccess, foundLastStartingPoint, _timeout, _skipTest);
+            Execute(_root, _skip, ref _lastSuccess, foundLastStartingPoint, _timeout, _skipTest, _testOnly);
             Console.WriteLine($"Finished everything in {watch.Elapsed.TotalMinutes}");
             SaveProgress();
         }
 
-        public static void Execute(string root, HashSet<string> skip, ref string? lastSuccess, bool foundLastStartingPoint, int timeout, bool skipTest)
+        public static void Execute(string root, HashSet<string> skip, ref string? lastSuccess, bool foundLastStartingPoint, int timeout, bool skipTest, bool testOnly)
         {
             foreach (var serviceDir in Directory.GetDirectories(Path.Combine(root, "sdk")))
             {
@@ -60,7 +62,7 @@ namespace regen
                     if (dirName is null || !dirName.StartsWith("Azure.ResourceManager"))
                         continue;
 
-                    if (RegenDirectory(solutionDir, dirName, timeout, skipTest))
+                    if (RegenDirectory(solutionDir, dirName, timeout, skipTest, testOnly))
                     {
                         lastSuccess = solutionDir;
                     }
@@ -72,12 +74,13 @@ namespace regen
             }
         }
 
-        public static bool RegenDirectory(string solutionDir, string dirName, int timeout, bool skipTest)
+        public static bool RegenDirectory(string solutionDir, string dirName, int timeout, bool skipTest, bool testOnly)
         {
-            return ExecuteDotnet(solutionDir, "dotnet", dirName, "restore", timeout) &&
+            return (testOnly ? ExecuteDotnet(solutionDir, "dotnet", dirName, "restore", timeout) &&
+                ExecuteDotnet(solutionDir, "dotnet", dirName, "test", timeout, skipTest) :
+                ExecuteDotnet(solutionDir, "dotnet", dirName, "restore", timeout) &&
                 ExecuteDotnet(solutionDir, "dotnet", dirName, "build /t:GenerateCode", timeout) &&
-                ExecuteDotnet(solutionDir, "dotnet", dirName, "test", timeout, skipTest);
-            //if (!ExecutePs(solutionDir, Path.Combine(root, "eng", "scripts", "Export-API.ps1"), dirName, Path.GetFileName(serviceDir))) return;
+                ExecuteDotnet(solutionDir, "dotnet", dirName, "test", timeout, skipTest));
         }
 
         private static bool ExecutePs(string solutionDir, string script, string dirName, string args)
